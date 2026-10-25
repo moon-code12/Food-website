@@ -1653,6 +1653,29 @@
   line-height: 1.7;
 }
 
+.admin-auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.admin-auth-tabs button {
+  padding: 8px 16px;
+  border: 1px solid #e5dfd3;
+  background: #fffdf8;
+  color: #465044;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-auth-tabs button[aria-pressed='true'] {
+  border-color: #293d31;
+  background: #293d31;
+  color: #fff;
+}
+
 .admin-login-form {
   display: grid;
   gap: 17px;

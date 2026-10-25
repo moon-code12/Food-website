@@ -16,6 +16,7 @@ const savedOrdersKey = 'zeetummylab.orders'
 const savedMenuKey = 'zeetummylab.menu'
 const legacySavedOrderKey = 'zeetummylab.active-order'
 const latestOrderSessionKey = 'zeetummylab.latest-order'
+const adminEmail = 'sultanabdulwaheed382@gmail.com'
 const paymentAccount = {
   method: 'Bank transfer',
   bank: 'OPay',
@@ -366,6 +367,7 @@ function App() {
   const [activeOrder, setActiveOrder] = useState(useLocalDemo ? savedOrders.orders[0] ?? null : loadLatestOrderFromSession)
   const [trackingError, setTrackingError] = useState(useLocalDemo ? savedOrders.error : '')
   const [adminMessage, setAdminMessage] = useState(savedMenu.error || savedOrders.error)
+  const [adminAuthMode, setAdminAuthMode] = useState('sign-in')
   const [editingItem, setEditingItem] = useState(null)
   const [adminForm, setAdminForm] = useState({
     name: '',
@@ -714,12 +716,52 @@ function App() {
     event.preventDefault()
     if (!supabase) return
     const formData = new FormData(event.currentTarget)
+    const email = String(formData.get('email')).trim()
+    if (email.toLowerCase() !== adminEmail) {
+      setAdminMessage('You can’t sign in here. This page is for the store admin only.')
+      return
+    }
     const { error } = await supabase.auth.signInWithPassword({
-      email: String(formData.get('email')).trim(),
+      email,
       password: String(formData.get('password')),
     })
     if (error) setAdminMessage(`Sign-in failed: ${error.message}`)
     else setAdminMessage('')
+  }
+
+  async function signUpAdmin(event) {
+    event.preventDefault()
+    if (!supabase) return
+    const formData = new FormData(event.currentTarget)
+    const email = String(formData.get('email')).trim().toLowerCase()
+    const password = String(formData.get('password'))
+    if (email !== adminEmail) {
+      setAdminMessage('You can’t sign up here. Only the store admin can create an account.')
+      return
+    }
+    if (password.length < 8) {
+      setAdminMessage('Choose a password with at least 8 characters.')
+      return
+    }
+    if (password !== String(formData.get('confirmPassword'))) {
+      setAdminMessage('The two passwords do not match.')
+      return
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/#admin` },
+    })
+    if (error) {
+      setAdminMessage(`Sign-up failed: ${error.message}`)
+      return
+    }
+    if (data.session) {
+      setAdminMessage('')
+      return
+    }
+    setAdminAuthMode('sign-in')
+    setAdminMessage('Account created. Open the confirmation email we sent, then sign in here.')
   }
 
   async function signOutAdmin() {
@@ -1163,14 +1205,31 @@ function App() {
         ) : page === 'admin' && isSupabaseConfigured && !isStoreAdmin ? (
           <section className="admin-page section-wrap admin-login-page" aria-labelledby="admin-login-title">
             <div className="eyebrow"><span /> ZEE TUMMY LAB / STAFF</div>
-            <h1 id="admin-login-title">Admin <em>sign in.</em></h1>
-            <p>Sign in with the authorized store account to manage orders and the menu.</p>
+            <h1 id="admin-login-title">Admin <em>{adminAuthMode === 'sign-in' ? 'sign in.' : 'sign up.'}</em></h1>
+            <p>
+              {adminAuthMode === 'sign-in'
+                ? 'Staff area. Only the store admin can sign in to manage orders and the menu.'
+                : 'Staff area. Only the store admin can create an account here. Everyone else is turned away.'}
+            </p>
+            <div className="admin-auth-tabs" role="group" aria-label="Admin account">
+              <button type="button" aria-pressed={adminAuthMode === 'sign-in'} onClick={() => { setAdminAuthMode('sign-in'); setAdminMessage('') }}>Sign in</button>
+              <button type="button" aria-pressed={adminAuthMode === 'sign-up'} onClick={() => { setAdminAuthMode('sign-up'); setAdminMessage('') }}>Sign up</button>
+            </div>
             {adminMessage && <p className="admin-message" role="alert">{adminMessage}</p>}
-            <form className="admin-panel admin-login-form" onSubmit={signInAdmin}>
-              <label>Email address<input name="email" type="email" autoComplete="username" defaultValue="sultanabdulwaheed382@gmail.com" required /></label>
-              <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
-              <button className="button button-primary" type="submit">Sign in <ArrowIcon /></button>
-            </form>
+            {adminAuthMode === 'sign-in' ? (
+              <form className="admin-panel admin-login-form" onSubmit={signInAdmin}>
+                <label>Email address<input name="email" type="email" autoComplete="username" required /></label>
+                <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+                <button className="button button-primary" type="submit">Sign in <ArrowIcon /></button>
+              </form>
+            ) : (
+              <form className="admin-panel admin-login-form" onSubmit={signUpAdmin}>
+                <label>Email address<input name="email" type="email" autoComplete="username" required /></label>
+                <label>Password<input name="password" type="password" autoComplete="new-password" minLength="8" required /></label>
+                <label>Confirm password<input name="confirmPassword" type="password" autoComplete="new-password" minLength="8" required /></label>
+                <button className="button button-primary" type="submit">Create account <ArrowIcon /></button>
+              </form>
+            )}
           </section>
         ) : page === 'admin' ? (
           <section className="admin-page section-wrap" aria-labelledby="admin-title">
