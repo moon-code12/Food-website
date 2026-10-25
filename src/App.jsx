@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isSupabaseConfigured, mapDatabaseOrder, supabase, useLocalDemo } from './lib/supabase.js'
 import './App.css'
 
 const categories = ['All', 'Rice', 'Swallow', 'Snacks', 'Drinks', 'Fast Food']
@@ -9,9 +10,18 @@ const orderStatuses = [
   'Out for delivery',
   'Delivered',
 ]
+const paymentMethods = ['Bank transfer', 'Payment on delivery']
+const paymentStatuses = ['Awaiting verification', 'Due on delivery', 'Paid']
 const savedOrdersKey = 'zeetummylab.orders'
 const savedMenuKey = 'zeetummylab.menu'
 const legacySavedOrderKey = 'zeetummylab.active-order'
+const latestOrderSessionKey = 'zeetummylab.latest-order'
+const paymentAccount = {
+  method: 'Bank transfer',
+  bank: 'OPay',
+  accountNumber: '8055628954',
+  accountName: 'Sultan Abdulwaheed',
+}
 
 const menuItems = [
   {
@@ -23,8 +33,8 @@ const menuItems = [
     tag: 'BESTSELLER',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=900&q=85',
-    alt: 'A colorful serving of seasoned rice',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Nigerian_jollof.jpg?width=900',
+    alt: 'Nigerian jollof rice',
   },
   {
     id: 'small-chops',
@@ -35,8 +45,8 @@ const menuItems = [
     tag: 'PARTY FAVE',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=85',
-    alt: 'A golden assortment of bite-sized savory pastries',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/SmallChops.jpg?width=900',
+    alt: 'Nigerian small chops with puff-puff, samosas and spring rolls',
   },
   {
     id: 'asun',
@@ -47,8 +57,8 @@ const menuItems = [
     tag: 'NICE & SPICY',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=900&q=85',
-    alt: 'Smoky grilled meat served fresh from the barbecue',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Goat_meat_Asun.jpg?width=900',
+    alt: 'Nigerian asun goat meat in pepper mix',
   },
   {
     id: 'doughnut-bites',
@@ -59,8 +69,8 @@ const menuItems = [
     tag: 'SWEET TREAT',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=900&q=85',
-    alt: 'Freshly made doughnuts dusted with sugar',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Nigerian-puff-puff-recipe_cropped.jpg?width=900',
+    alt: 'Nigerian puff-puff, a soft fried dough snack',
   },
   {
     id: 'fried-rice',
@@ -71,8 +81,8 @@ const menuItems = [
     tag: 'LUNCH FAVE',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=900&q=85',
-    alt: 'A hearty bowl of freshly cooked rice',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/A_plate_of_rice_with_beef.jpg?width=900',
+    alt: 'Nigerian fried rice served with spiced beef',
   },
   {
     id: 'ofada-rice',
@@ -83,8 +93,8 @@ const menuItems = [
     tag: 'LOCAL LOVE',
     available: false,
     image:
-      'https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=900&q=85',
-    alt: 'A serving of rice with a rich pepper sauce',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Nigeria_ofada.jpg?width=900',
+    alt: 'Nigerian ofada rice and stew',
   },
   {
     id: 'egusi-pounded-yam',
@@ -95,8 +105,8 @@ const menuItems = [
     tag: 'SOUL FOOD',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=85',
-    alt: 'A hearty bowl of traditional-style soup',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/EGUSI_SOUP.JPG?width=900',
+    alt: 'Nigerian egusi soup',
   },
   {
     id: 'efo-eba',
@@ -107,8 +117,8 @@ const menuItems = [
     tag: 'HOME STYLE',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=85',
-    alt: 'A freshly prepared bowl of stew and vegetables',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Efo_riro.jpg?width=900',
+    alt: 'Nigerian efo riro',
   },
   {
     id: 'puff-puff',
@@ -119,8 +129,8 @@ const menuItems = [
     tag: 'MADE FRESH',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=85',
-    alt: 'Freshly baked golden bites',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Nigerian-puff-puff-recipe_cropped.jpg?width=900',
+    alt: 'Golden Nigerian puff-puff',
   },
   {
     id: 'zobo',
@@ -131,8 +141,20 @@ const menuItems = [
     tag: 'ICE COLD',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=900&q=85',
-    alt: 'A refreshing chilled drink',
+      'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Zobo_drink.jpg/960px-Zobo_drink.jpg',
+    alt: 'A glass of chilled zobo drink made from roselle flowers',
+  },
+  {
+    id: 'yoghurt',
+    name: 'Chilled Yoghurt',
+    detail: 'A smooth, creamy yoghurt drink served cold',
+    category: 'Drinks',
+    price: 2500,
+    tag: 'CHILLED',
+    available: true,
+    image:
+      'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3e/Yogurt_drink.jpg/960px-Yogurt_drink.jpg',
+    alt: 'A chilled yoghurt drink served in a calabash',
   },
   {
     id: 'chapman',
@@ -143,8 +165,8 @@ const menuItems = [
     tag: 'PARTY CLASSIC',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=900&q=85',
-    alt: 'A colorful refreshing cocktail',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Chapman_drink.jpg?width=900',
+    alt: 'Chapman, a Nigerian non-alcoholic cocktail',
   },
   {
     id: 'suya-wrap',
@@ -155,8 +177,8 @@ const menuItems = [
     tag: 'STREET FOOD',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=900&q=85',
-    alt: 'Grilled meat wrapped up fresh to order',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Suya_with_pepper_sauce.jpg?width=900',
+    alt: 'Nigerian suya with pepper sauce and onions',
   },
   {
     id: 'asun-fries',
@@ -167,8 +189,8 @@ const menuItems = [
     tag: 'NICE & SPICY',
     available: true,
     image:
-      'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=900&q=85',
-    alt: 'A generous serving of crispy loaded fries',
+      'https://commons.wikimedia.org/wiki/Special:FilePath/Goat_meat_Asun.jpg?width=900',
+    alt: 'Nigerian asun goat meat in pepper mix',
   },
 ]
 const defaultMenuImage = menuItems[0].image
@@ -195,8 +217,21 @@ function loadSavedMenu() {
       typeof item.available === 'boolean' &&
       typeof item.image === 'string',
     )
+    const defaultItemsById = new Map(menuItems.map((item) => [item.id, item]))
+    const items = isValidMenu
+      ? parsedMenu.map((item) => {
+          const defaultItem = defaultItemsById.get(item.id)
+          const hasOldZoboPhoto = item.id === 'zobo' && item.image.includes('Zobo_(local_drink_in_northern_Nigeria).jpg')
+          return (item.image.includes('images.unsplash.com') || hasOldZoboPhoto) && defaultItem
+            ? { ...item, image: defaultItem.image, alt: defaultItem.alt }
+            : item
+        })
+      : menuItems
+    if (isValidMenu && !items.some((item) => item.id === 'yoghurt')) {
+      items.push(defaultItemsById.get('yoghurt'))
+    }
     return isValidMenu
-      ? { items: parsedMenu, error: '' }
+      ? { items, error: '' }
       : { items: menuItems, error: 'Saved menu data is invalid. The starter menu is shown instead.' }
   } catch (error) {
     return {
@@ -250,6 +285,15 @@ function loadSavedOrders() {
   }
 }
 
+function loadLatestOrderFromSession() {
+  try {
+    const savedOrder = window.sessionStorage.getItem(latestOrderSessionKey)
+    return savedOrder ? JSON.parse(savedOrder) : null
+  } catch {
+    return null
+  }
+}
+
 function createOrderId() {
   return `ZEE-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`
 }
@@ -299,21 +343,28 @@ function App() {
   const [savedOrders] = useState(loadSavedOrders)
   const [page, setPage] = useState(() => {
     const route = window.location.hash.slice(1)
-    return ['about', 'admin', 'cart', 'checkout', 'order-confirmation', 'tracking'].includes(route)
+    return ['about', 'admin', 'cart', 'checkout', 'contact', 'order-confirmation', 'tracking'].includes(route)
       ? route
       : 'home'
   })
   const [activeCategory, setActiveCategory] = useState('All')
-  const [menuItems, setMenuItems] = useState(savedMenu.items)
-  const [orders, setOrders] = useState(savedOrders.orders)
+  const [menuItems, setMenuItems] = useState(useLocalDemo ? savedMenu.items : [])
+  const [orders, setOrders] = useState(useLocalDemo ? savedOrders.orders : [])
+  const [adminSession, setAdminSession] = useState(null)
+  const [adminAuthLoading, setAdminAuthLoading] = useState(isSupabaseConfigured)
+  const [menuLoadMessage, setMenuLoadMessage] = useState('')
+  const [orderSubmitMessage, setOrderSubmitMessage] = useState('')
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [maxPrice, setMaxPrice] = useState(20000)
   const [cart, setCart] = useState({})
   const [cartOpen, setCartOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState(paymentMethods[0])
   const [cartMessage, setCartMessage] = useState('')
-  const [checkoutDetails, setCheckoutDetails] = useState(savedOrders.orders[0] ?? null)
-  const [activeOrder, setActiveOrder] = useState(savedOrders.orders[0] ?? null)
-  const [trackingError, setTrackingError] = useState(savedOrders.error)
+  const [checkoutDetails, setCheckoutDetails] = useState(useLocalDemo ? savedOrders.orders[0] ?? null : loadLatestOrderFromSession)
+  const [activeOrder, setActiveOrder] = useState(useLocalDemo ? savedOrders.orders[0] ?? null : loadLatestOrderFromSession)
+  const [trackingError, setTrackingError] = useState(useLocalDemo ? savedOrders.error : '')
   const [adminMessage, setAdminMessage] = useState(savedMenu.error || savedOrders.error)
   const [editingItem, setEditingItem] = useState(null)
   const [adminForm, setAdminForm] = useState({
@@ -326,6 +377,7 @@ function App() {
     alt: '',
     available: true,
   })
+  const isStoreAdmin = adminSession?.user?.email?.toLowerCase() === 'sultanabdulwaheed382@gmail.com'
 
   const filteredItems = menuItems.filter((item) => {
     const matchesCategory =
@@ -351,7 +403,7 @@ function App() {
   useEffect(() => {
     const syncPageWithHash = () => {
       const route = window.location.hash.slice(1)
-      setPage(['about', 'admin', 'cart', 'checkout', 'order-confirmation', 'tracking'].includes(route) ? route : 'home')
+      setPage(['about', 'admin', 'cart', 'checkout', 'contact', 'order-confirmation', 'tracking'].includes(route) ? route : 'home')
     }
     window.addEventListener('popstate', syncPageWithHash)
     window.addEventListener('hashchange', syncPageWithHash)
@@ -361,15 +413,125 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!supabase) return undefined
+    let isMounted = true
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!isMounted) return
+      if (error) setAdminMessage(`Unable to check admin session: ${error.message}`)
+      setAdminSession(data?.session ?? null)
+      setAdminAuthLoading(false)
+    })
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAdminSession(session)
+      setAdminAuthLoading(false)
+    })
+
+    supabase.from('menu_items').select('*').order('name').then(({ data, error }) => {
+      if (!isMounted) return
+      if (error) {
+        setMenuLoadMessage(`The menu could not be loaded: ${error.message}`)
+        return
+      }
+      setMenuItems(data ?? [])
+    })
+
+    return () => {
+      isMounted = false
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!supabase || !isStoreAdmin) return undefined
+    let isMounted = true
+
+    const loadOrders = async () => {
+      const { data, error } = await supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false })
+      if (!isMounted) return
+      if (error) {
+        setAdminMessage(`Unable to load orders. Check the admin account and database policies: ${error.message}`)
+        return
+      }
+      setOrders((data ?? []).map(mapDatabaseOrder))
+    }
+    loadOrders()
+    const timer = window.setInterval(loadOrders, 30000)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(timer)
+    }
+  }, [isStoreAdmin])
+
+  useEffect(() => {
+    if (!supabase || page !== 'tracking' || !activeOrder?.id || !activeOrder?.phone) return undefined
+    const refreshOrder = async () => {
+      const { data, error } = await supabase.rpc('track_order', {
+        p_order_number: activeOrder.id,
+        p_customer_phone: activeOrder.phone,
+      })
+      if (!error && data) setActiveOrder(data)
+    }
+    const timer = window.setInterval(refreshOrder, 30000)
+    return () => window.clearInterval(timer)
+  }, [page, activeOrder?.id, activeOrder?.phone])
+
+  async function lookupTrackingOrder(event) {
+    event.preventDefault()
+    if (!supabase) return
+    const formData = new FormData(event.currentTarget)
+    setTrackingError('')
+    const { data, error } = await supabase.rpc('track_order', {
+      p_order_number: String(formData.get('orderNumber')).trim(),
+      p_customer_phone: String(formData.get('phone')).trim(),
+    })
+    if (error) {
+      setTrackingError(`Unable to look up this order: ${error.message}`)
+      return
+    }
+    if (!data) {
+      setTrackingError('We couldn’t find an order with that number and phone number.')
+      return
+    }
+    setActiveOrder(data)
+  }
+
   function navigateTo(nextPage) {
     const nextHash = nextPage === 'home' ? '' : `#${nextPage}`
     window.history.pushState({ page: nextPage }, '', `${window.location.pathname}${nextHash}`)
     setPage(nextPage)
     setCartOpen(false)
+    setMobileMenuOpen(false)
     window.scrollTo(0, 0)
   }
 
-  function persistMenu(nextMenu) {
+  function navigateToHomeSection(sectionId) {
+    setMobileMenuOpen(false)
+    if (page !== 'home') {
+      navigateTo('home')
+      window.setTimeout(() => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' })
+      }, 0)
+      return
+    }
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  async function persistMenu(nextMenu) {
+    if (supabase) {
+      const { error } = await supabase.from('menu_items').upsert(nextMenu, { onConflict: 'id' })
+      if (error) {
+        setAdminMessage(`Unable to save menu changes: ${error.message}`)
+        return false
+      }
+      setMenuItems(nextMenu)
+      setAdminMessage('Menu changes saved to the shared database.')
+      return true
+    }
+
     try {
       window.localStorage.setItem(savedMenuKey, JSON.stringify(nextMenu))
       setMenuItems(nextMenu)
@@ -385,7 +547,7 @@ function App() {
     }
   }
 
-  function handleSaveMenuItem(event) {
+  async function handleSaveMenuItem(event) {
     event.preventDefault()
     const form = event.currentTarget
     if (!form.reportValidity()) return
@@ -406,7 +568,7 @@ function App() {
     const nextMenu = editingItem
       ? menuItems.map((menuItem) => menuItem.id === editingItem.id ? item : menuItem)
       : [item, ...menuItems]
-    if (!persistMenu(nextMenu)) return
+    if (!(await persistMenu(nextMenu))) return
     setEditingItem(null)
     setAdminForm({
       name: '',
@@ -426,9 +588,17 @@ function App() {
     window.scrollTo(0, 0)
   }
 
-  function deleteMenuItem(item) {
+  async function deleteMenuItem(item) {
     const nextMenu = menuItems.filter((menuItem) => menuItem.id !== item.id)
-    if (!persistMenu(nextMenu)) return
+    if (supabase) {
+      const { error } = await supabase.from('menu_items').delete().eq('id', item.id)
+      if (error) {
+        setAdminMessage(`Unable to delete menu item: ${error.message}`)
+        return
+      }
+      setMenuItems(nextMenu)
+      setAdminMessage('Menu item removed from the shared database.')
+    } else if (!(await persistMenu(nextMenu))) return
     setCart((currentCart) => {
       const nextCart = { ...currentCart }
       delete nextCart[item.id]
@@ -449,19 +619,26 @@ function App() {
     }
   }
 
-  function toggleAvailability(item) {
-    persistMenu(menuItems.map((menuItem) =>
+  async function toggleAvailability(item) {
+    await persistMenu(menuItems.map((menuItem) =>
       menuItem.id === item.id ? { ...menuItem, available: !menuItem.available } : menuItem,
     ))
   }
 
-  function updateSavedOrderStatus(orderId, status) {
+  async function updateSavedOrderStatus(orderId, status) {
     if (!orderStatuses.includes(status)) return
+    if (supabase) {
+      const { data, error } = await supabase.from('orders').update({ status }).eq('order_number', orderId).select('order_number').maybeSingle()
+      if (error || !data) {
+        setAdminMessage(`Unable to update order status: ${error?.message || 'Order was not updated. Check admin permissions.'}`)
+        return
+      }
+    }
     const updatedOrders = orders.map((order) =>
       order.id === orderId ? { ...order, status } : order,
     )
     try {
-      window.localStorage.setItem(savedOrdersKey, JSON.stringify(updatedOrders))
+      if (useLocalDemo) window.localStorage.setItem(savedOrdersKey, JSON.stringify(updatedOrders))
       const updatedOrder = updatedOrders.find((order) => order.id === orderId)
       setOrders(updatedOrders)
       if (activeOrder?.id === orderId) setActiveOrder(updatedOrder)
@@ -476,6 +653,32 @@ function App() {
       setAdminMessage(
         message,
       )
+    }
+  }
+
+  async function updateSavedPaymentStatus(orderId, paymentStatus) {
+    if (!paymentStatuses.includes(paymentStatus)) return
+    if (supabase) {
+      const { data, error } = await supabase.from('orders').update({ payment_status: paymentStatus }).eq('order_number', orderId).select('order_number').maybeSingle()
+      if (error || !data) {
+        setAdminMessage(`Unable to update payment status: ${error?.message || 'Order was not updated. Check admin permissions.'}`)
+        return
+      }
+    }
+    const updatedOrders = orders.map((order) =>
+      order.id === orderId ? { ...order, paymentStatus } : order,
+    )
+    try {
+      if (useLocalDemo) window.localStorage.setItem(savedOrdersKey, JSON.stringify(updatedOrders))
+      const updatedOrder = updatedOrders.find((order) => order.id === orderId)
+      setOrders(updatedOrders)
+      if (activeOrder?.id === orderId) setActiveOrder(updatedOrder)
+      if (checkoutDetails?.id === orderId) setCheckoutDetails(updatedOrder)
+      setAdminMessage(`Payment for ${orderId} marked ${paymentStatus.toLowerCase()}.`)
+    } catch (error) {
+      setAdminMessage(error instanceof Error
+        ? `Unable to save payment status: ${error.message}`
+        : 'Unable to save payment status.')
     }
   }
 
@@ -507,16 +710,46 @@ function App() {
     })
   }
 
-  function submitOrder(event) {
+  async function signInAdmin(event) {
+    event.preventDefault()
+    if (!supabase) return
+    const formData = new FormData(event.currentTarget)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: String(formData.get('email')).trim(),
+      password: String(formData.get('password')),
+    })
+    if (error) setAdminMessage(`Sign-in failed: ${error.message}`)
+    else setAdminMessage('')
+  }
+
+  async function signOutAdmin() {
+    if (!supabase) return
+    const { error } = await supabase.auth.signOut()
+    if (error) setAdminMessage(`Unable to sign out: ${error.message}`)
+    else {
+      setOrders([])
+      setAdminMessage('You have signed out.')
+    }
+  }
+
+  async function submitOrder(event) {
     event.preventDefault()
     const form = event.currentTarget
     if (!form.reportValidity()) return
+    if (import.meta.env.PROD && !supabase) {
+      setOrderSubmitMessage('Online ordering is not configured yet. Please contact us by email or phone.')
+      return
+    }
     const formData = new FormData(form)
-    const order = {
+    const orderDetails = {
       id: createOrderId(),
       name: formData.get('name'),
       phone: formData.get('phone'),
       address: formData.get('address'),
+      paymentMethod: String(formData.get('paymentMethod')),
+      paymentStatus: formData.get('paymentMethod') === 'Bank transfer'
+        ? 'Awaiting verification'
+        : 'Due on delivery',
       items: cartItems.map((item) => ({
         ...item,
         quantity: cart[item.id],
@@ -527,21 +760,74 @@ function App() {
       status: orderStatuses[0],
       createdAt: new Date().toISOString(),
     }
+    let order = orderDetails
+    setOrderSubmitMessage('')
+    setIsSubmittingOrder(true)
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.rpc('create_order', {
+          p_customer_name: orderDetails.name,
+          p_customer_phone: orderDetails.phone,
+          p_delivery_address: orderDetails.address,
+          p_payment_method: orderDetails.paymentMethod,
+          p_items: orderDetails.items.map((item) => ({ id: item.id, quantity: item.quantity })),
+        })
+        if (error) {
+          setOrderSubmitMessage(`Your order could not be placed: ${error.message}`)
+          setIsSubmittingOrder(false)
+          return
+        }
+        if (!data) {
+          setOrderSubmitMessage('The server did not return an order confirmation. Please contact the restaurant before trying again.')
+          setIsSubmittingOrder(false)
+          return
+        }
+        order = data
+      } catch (error) {
+        setOrderSubmitMessage(error instanceof Error
+          ? `Your order could not be placed: ${error.message}`
+          : 'Your order could not be placed. Please try again or contact the restaurant.')
+        setIsSubmittingOrder(false)
+        return
+      }
+    }
     setActiveOrder(order)
     setCheckoutDetails(order)
     setTrackingError('')
-    const updatedOrders = [order, ...orders]
     try {
-      window.localStorage.setItem(savedOrdersKey, JSON.stringify(updatedOrders))
-      setOrders(updatedOrders)
-    } catch (error) {
-      setTrackingError(
-        error instanceof Error
-          ? `Order is available in this session, but could not be saved for tracking: ${error.message}`
-          : 'Order is available in this session, but could not be saved for tracking.',
-      )
+      window.sessionStorage.setItem(latestOrderSessionKey, JSON.stringify(order))
+    } catch {
+      // Keep the order visible for this page even when session storage is unavailable.
     }
+    if (useLocalDemo) {
+      const updatedOrders = [order, ...orders]
+      try {
+        window.localStorage.setItem(savedOrdersKey, JSON.stringify(updatedOrders))
+        setOrders(updatedOrders)
+      } catch (error) {
+        setTrackingError(
+          error instanceof Error
+            ? `Order is available in this session, but could not be saved for tracking: ${error.message}`
+            : 'Order is available in this session, but could not be saved for tracking.',
+        )
+      }
+    }
+    setIsSubmittingOrder(false)
     navigateTo('order-confirmation')
+  }
+
+  function submitContactMessage(event) {
+    event.preventDefault()
+    const form = event.currentTarget
+    if (!form.reportValidity()) return
+    const formData = new FormData(form)
+    const name = String(formData.get('name')).trim()
+    const email = String(formData.get('email')).trim()
+    const topic = String(formData.get('topic'))
+    const message = String(formData.get('message')).trim()
+    const subject = `${topic} — ${name}`
+    const body = `Name: ${name}\nEmail: ${email}\nTopic: ${topic}\n\n${message}`
+    window.location.href = `mailto:sultanabdulwaheed382@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
 
   function updateOrderStatus(status) {
@@ -561,13 +847,26 @@ function App() {
       <header className="site-header" id="home">
         <div className="header-inner">
           <Brand />
-          <nav className="main-nav" aria-label="Main navigation">
-            <a href="#menu">The menu</a>
+          <nav className={`main-nav${mobileMenuOpen ? ' is-open' : ''}`} id="main-navigation" aria-label="Main navigation">
+            <button type="button" onClick={() => navigateToHomeSection('menu')}>The menu</button>
             <button type="button" onClick={() => navigateTo('about')}>About us</button>
-            <a href="#reviews">Kind words</a>
+            <button type="button" onClick={() => navigateTo('contact')}>Contact</button>
+            <button type="button" onClick={() => navigateToHomeSection('reviews')}>Kind words</button>
             <button type="button" onClick={() => navigateTo('tracking')}>Track order</button>
-            <button type="button" onClick={() => navigateTo('admin')}>Admin demo</button>
+            <button type="button" onClick={() => navigateTo('admin')}>{useLocalDemo ? 'Admin demo' : 'Admin sign in'}</button>
           </nav>
+          <button
+            className="mobile-menu-toggle"
+            type="button"
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="main-navigation"
+            onClick={() => setMobileMenuOpen((isOpen) => !isOpen)}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
           <button
             className="header-cart"
             type="button"
@@ -600,6 +899,9 @@ function App() {
       </header>
 
       <main>
+        {import.meta.env.PROD && !isSupabaseConfigured && page === 'home' && (
+          <p className="backend-config-banner" role="alert">This website is not accepting online orders yet. The database still needs to be connected.</p>
+        )}
         {page === 'home' ? (
           <>
         <section className="hero" aria-labelledby="hero-title">
@@ -654,7 +956,7 @@ function App() {
             <div>
               <div className="eyebrow"><span /> FRESH FROM OUR KITCHEN</div>
               <h2>Find your <em>favourite.</em></h2>
-              <p className="menu-intro">Nigerian comfort food, made with love. Pick a plate, we’ll bring it to you.</p>
+              <p className="menu-intro">Nigerian comfort food, made with love. Pick a plate, we’ll bring it to you. Photos are illustrative and may not show the exact meal.</p>
             </div>
             <button
               className="cart-toggle"
@@ -671,6 +973,7 @@ function App() {
               Your cart <span>{cartCount}</span>
             </button>
           </div>
+          {menuLoadMessage && <p className="menu-load-message" role="alert">{menuLoadMessage}</p>}
           <aside
             className="cart-summary"
             id="cart-summary"
@@ -850,11 +1153,30 @@ function App() {
           </div>
         </section>
           </>
+        ) : page === 'admin' && import.meta.env.PROD && !isSupabaseConfigured ? (
+          <section className="admin-page section-wrap" aria-labelledby="admin-setup-title">
+            <div className="admin-demo-notice" role="alert">The server and admin account are not configured yet. This page is unavailable in the production site.</div>
+            <h1 id="admin-setup-title">Admin setup required</h1>
+          </section>
+        ) : page === 'admin' && isSupabaseConfigured && adminAuthLoading ? (
+          <section className="admin-page section-wrap" aria-live="polite"><p>Checking admin session…</p></section>
+        ) : page === 'admin' && isSupabaseConfigured && !isStoreAdmin ? (
+          <section className="admin-page section-wrap admin-login-page" aria-labelledby="admin-login-title">
+            <div className="eyebrow"><span /> ZEE TUMMY LAB / STAFF</div>
+            <h1 id="admin-login-title">Admin <em>sign in.</em></h1>
+            <p>Sign in with the authorized store account to manage orders and the menu.</p>
+            {adminMessage && <p className="admin-message" role="alert">{adminMessage}</p>}
+            <form className="admin-panel admin-login-form" onSubmit={signInAdmin}>
+              <label>Email address<input name="email" type="email" autoComplete="username" defaultValue="sultanabdulwaheed382@gmail.com" required /></label>
+              <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+              <button className="button button-primary" type="submit">Sign in <ArrowIcon /></button>
+            </form>
+          </section>
         ) : page === 'admin' ? (
           <section className="admin-page section-wrap" aria-labelledby="admin-title">
-            <div className="admin-demo-notice" role="note">
+            {useLocalDemo && <div className="admin-demo-notice" role="note">
               Browser-local admin demo. There is no staff login, server, or shared data; do not use this dashboard for real customer information.
-            </div>
+            </div>}
             <div className="admin-heading">
               <div>
                 <div className="eyebrow"><span /> ZEE TUMMY LAB / STAFF</div>
@@ -864,12 +1186,13 @@ function App() {
               <button type="button" className="admin-return-link" onClick={() => navigateTo('home')}>
                 View customer site <ArrowIcon />
               </button>
+              {supabase && isStoreAdmin && <button type="button" className="admin-return-link" onClick={signOutAdmin}>Sign out</button>}
             </div>
             {adminMessage && <p className="admin-message" role="status">{adminMessage}</p>}
 
             <div className="sales-summary" aria-label="Sales summary">
-              <article><span>ORDERS RECEIVED</span><strong>{orders.length}</strong><small>Saved in this browser</small></article>
-              <article><span>GROSS ORDER VALUE</span><strong>{formatPrice(totalSales)}</strong><small>All submitted demo orders</small></article>
+              <article><span>ORDERS RECEIVED</span><strong>{orders.length}</strong><small>{supabase ? 'Saved in the database' : 'Saved in this browser'}</small></article>
+              <article><span>GROSS ORDER VALUE</span><strong>{formatPrice(totalSales)}</strong><small>Orders available to this dashboard</small></article>
               <article><span>DELIVERED</span><strong>{deliveredOrders}</strong><small>Orders marked delivered</small></article>
               <article><span>MENU ITEMS</span><strong>{menuItems.length}</strong><small>{menuItems.filter((item) => item.available).length} currently available</small></article>
             </div>
@@ -973,7 +1296,7 @@ function App() {
                 <span className="admin-item-count">{orders.length} total</span>
               </div>
               {orders.length === 0 ? (
-                <div className="admin-empty">No orders yet. Customer orders placed in this browser will appear here.</div>
+                <div className="admin-empty">No orders yet. Customer orders will appear here when submitted.</div>
               ) : (
                 <div className="admin-orders-list">
                   {orders.map((order) => (
@@ -982,17 +1305,28 @@ function App() {
                         <strong>{order.id}</strong>
                         <span>{order.name} · {order.phone}</span>
                         <span>{order.items.map((item) => `${item.name} × ${item.quantity}`).join(', ')}</span>
+                        <span>Payment: {order.paymentMethod || 'Bank transfer'} · {order.paymentStatus || 'Status unavailable'}</span>
                         <small>{order.address}</small>
                       </div>
                       <div className="admin-order-total">
                         <span>ORDER TOTAL</span>
                         <strong>{formatPrice(Number(order.total) || 0)}</strong>
                       </div>
-                      <label className="admin-order-status">Status
-                        <select value={order.status} onChange={(event) => updateSavedOrderStatus(order.id, event.target.value)}>
-                          {orderStatuses.map((status) => <option key={status}>{status}</option>)}
-                        </select>
-                      </label>
+                      <div className="admin-order-controls">
+                        <label className="admin-order-status">Order status
+                          <select value={order.status} onChange={(event) => updateSavedOrderStatus(order.id, event.target.value)}>
+                            {orderStatuses.map((status) => <option key={status}>{status}</option>)}
+                          </select>
+                        </label>
+                        <label className="admin-order-status">Payment status
+                          <select
+                            value={order.paymentStatus || (order.paymentMethod === 'Payment on delivery' ? 'Due on delivery' : 'Awaiting verification')}
+                            onChange={(event) => updateSavedPaymentStatus(order.id, event.target.value)}
+                          >
+                            {paymentStatuses.map((status) => <option key={status}>{status}</option>)}
+                          </select>
+                        </label>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -1110,29 +1444,87 @@ function App() {
               <div className="visit-inner section-wrap">
                 <div className="visit-copy">
                   <div className="eyebrow eyebrow-light"><span /> COME SAY HELLO</div>
-                  <h2>From Ikeja,<br />with <em>love.</em></h2>
-                  <p>Find our kitchen in Ikeja, Lagos. We’re here to make your next meal a little more special.</p>
+                  <h2>From Ilorin,<br />with <em>love.</em></h2>
+                  <p>Serving Ilorin, Kwara State with freshly prepared meals.</p>
                   <div className="visit-address">
                     <span>OUR NEIGHBOURHOOD</span>
-                    <strong>Ikeja, Lagos, Nigeria</strong>
-                    <small>Delivery kitchen serving Ikeja and nearby areas.</small>
+                    <strong>Ilorin, Kwara State, Nigeria</strong>
+                    <small>Delivery service in Ilorin. Confirm delivery availability when ordering.</small>
                   </div>
                 </div>
                 <div className="hours-card">
                   <span className="hours-eyebrow">WHEN WE’RE COOKING</span>
                   <h3>Opening hours</h3>
                   <dl>
-                    <div><dt>Monday – Thursday</dt><dd>10:00 am – 10:00 pm</dd></div>
-                    <div><dt>Friday – Saturday</dt><dd>10:00 am – 11:00 pm</dd></div>
-                    <div><dt>Sunday</dt><dd>12:00 pm – 9:00 pm</dd></div>
+                    <div><dt>Every day</dt><dd>8:00 am – 10:00 pm</dd></div>
                   </dl>
                   <p>Hours can change on public holidays. Check before you make a special trip.</p>
                 </div>
               </div>
             </div>
             <p className="about-disclaimer">
-              Restaurant photos are illustrative. Ikeja location and opening hours are sample details—replace them with verified business information and original restaurant photos before publishing.
+              Location and opening hours are provided by the business. Restaurant photos are illustrative; replace them with original food and restaurant photos when available.
             </p>
+          </section>
+        ) : page === 'contact' ? (
+          <section className="contact-page section-wrap" aria-labelledby="contact-title">
+            <button className="back-to-menu" type="button" onClick={() => navigateTo('home')}>
+              ← Back to the menu
+            </button>
+            <div className="contact-heading">
+              <div className="eyebrow"><span /> WE’RE ALL EARS</div>
+              <h1 id="contact-title">Let’s talk <em>food.</em></h1>
+              <p>Questions about an order, a menu item, or a celebration? Send us a note and we’ll get back to you.</p>
+            </div>
+            <div className="contact-layout">
+              <aside className="contact-note">
+                <span className="contact-note-mark" aria-hidden="true">z.</span>
+                <h2>Good things start with a hello.</h2>
+                <p>For order updates, include your order number so we can help faster.</p>
+                <div className="contact-detail">
+                  <span>EMAIL US</span>
+                  <a href="mailto:sultanabdulwaheed382@gmail.com">sultanabdulwaheed382@gmail.com</a>
+                </div>
+                <div className="contact-detail">
+                  <span>CALL US</span>
+                  <a href="tel:+2349065974857">09065974857</a>
+                </div>
+                <div className="contact-detail">
+                  <span>ALREADY ORDERED?</span>
+                  <button type="button" onClick={() => navigateTo('tracking')}>Track your order <ArrowIcon /></button>
+                </div>
+              </aside>
+              <form className="contact-form" onSubmit={submitContactMessage}>
+                <div className="contact-form-heading">
+                  <span>DROP US A LINE</span>
+                  <h2>How can we help?</h2>
+                </div>
+                <div className="contact-form-row">
+                  <label htmlFor="contact-name">Your name</label>
+                  <input id="contact-name" name="name" autoComplete="name" required maxLength="100" placeholder="e.g. Ada Okafor" />
+                </div>
+                <div className="contact-form-row">
+                  <label htmlFor="contact-email">Email address</label>
+                  <input id="contact-email" name="email" type="email" autoComplete="email" required maxLength="254" placeholder="you@example.com" />
+                </div>
+                <div className="contact-form-row">
+                  <label htmlFor="contact-topic">What’s this about?</label>
+                  <select id="contact-topic" name="topic" defaultValue="General question">
+                    <option>General question</option>
+                    <option>Order support</option>
+                    <option>Menu feedback</option>
+                    <option>Catering and events</option>
+                  </select>
+                </div>
+                <div className="contact-form-row">
+                  <label htmlFor="contact-message">Your message</label>
+                  <textarea id="contact-message" name="message" rows="5" required minLength="10" maxLength="3000" placeholder="Tell us a little more…" />
+                  <small>Please don’t include payment details or other sensitive information.</small>
+                </div>
+                <button className="button button-primary contact-submit" type="submit">Prepare email <ArrowIcon /></button>
+                <p className="contact-form-note">Submitting opens your email app with the message ready to send.</p>
+              </form>
+            </div>
           </section>
         ) : page === 'cart' ? (
           <section className="checkout-page section-wrap" aria-labelledby="cart-title">
@@ -1198,7 +1590,7 @@ function App() {
                   <h2>Order summary</h2>
                   <div><span>Subtotal</span><strong>{formatPrice(cartTotal)}</strong></div>
                   <div><span>Delivery fee</span><strong>{deliveryFeeLabel}</strong></div>
-                  <p>Delivery is ₦1,500, or free when your subtotal is ₦30,000 or more.</p>
+                  <p>Current starter fee: ₦1,500, or free when your subtotal is ₦30,000 or more. Fees may change; confirm the total before payment.</p>
                   <div className="order-summary-total"><span>Total</span><strong>{formatPrice(cartTotal + deliveryFee)}</strong></div>
                   <button className="button button-primary" type="button" onClick={() => navigateTo('checkout')}>
                     Continue to checkout <ArrowIcon />
@@ -1246,7 +1638,39 @@ function App() {
                       Delivery address
                       <textarea name="address" autoComplete="street-address" rows="4" placeholder="Street address, area, city and any helpful directions" required />
                     </label>
-                    <p className="checkout-demo-note">This demo doesn’t take payment or send orders to a restaurant.</p>
+                    <section className="payment-method-card" aria-labelledby="payment-method-title">
+                      <span className="payment-method-eyebrow">PAYMENT METHOD</span>
+                      <h3 id="payment-method-title">Choose how to pay</h3>
+                      <fieldset className="payment-method-options">
+                        <legend className="visually-hidden">Choose a payment method</legend>
+                        {paymentMethods.map((method) => (
+                          <label key={method}>
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value={method}
+                              checked={paymentMethod === method}
+                              onChange={() => setPaymentMethod(method)}
+                              required
+                            />
+                            {method}
+                          </label>
+                        ))}
+                      </fieldset>
+                      {paymentMethod === 'Bank transfer' ? (
+                        <>
+                          <dl>
+                            <div><dt>Bank</dt><dd>{paymentAccount.bank}</dd></div>
+                            <div><dt>Account number</dt><dd>{paymentAccount.accountNumber}</dd></div>
+                            <div><dt>Account name</dt><dd>{paymentAccount.accountName}</dd></div>
+                          </dl>
+                          <p>After your order is confirmed, transfer the total and use your order number as the reference. The restaurant will verify the transfer manually.</p>
+                        </>
+                      ) : (
+                        <p>Pay the delivery agent when your order arrives.</p>
+                      )}
+                    </section>
+                    <p className="checkout-demo-note">{supabase ? 'Orders are saved to the restaurant database.' : useLocalDemo ? 'This local demo does not send orders to the restaurant.' : 'Online ordering is unavailable until the database is configured.'}</p>
                   </div>
                   <aside className="checkout-review">
                     <h2>Review your order</h2>
@@ -1261,7 +1685,10 @@ function App() {
                     <div><span>Subtotal</span><strong>{formatPrice(cartTotal)}</strong></div>
                     <div><span>Delivery fee</span><strong>{deliveryFeeLabel}</strong></div>
                     <div className="order-summary-total"><span>Total</span><strong>{formatPrice(cartTotal + deliveryFee)}</strong></div>
-                    <button className="button button-primary" type="submit">Submit order details <ArrowIcon /></button>
+                    {orderSubmitMessage && <p className="order-submit-message" role="alert">{orderSubmitMessage}</p>}
+                    <button className="button button-primary" type="submit" disabled={isSubmittingOrder}>
+                      {isSubmittingOrder ? 'Submitting…' : supabase ? 'Place order' : useLocalDemo ? 'Submit order details' : 'Order online'} <ArrowIcon />
+                    </button>
                     <button className="summary-back-link" type="button" onClick={() => navigateTo('cart')}>
                       Edit cart
                     </button>
@@ -1275,12 +1702,27 @@ function App() {
             <div className="confirmation-mark" aria-hidden="true">✓</div>
             <div className="eyebrow"><span /> DETAILS REVIEWED</div>
             <h1 id="confirmation-title">Thanks, {checkoutDetails?.name || 'friend'}.</h1>
-            <p className="confirmation-intro">Your order details are ready. This front-end demo does not send an order to the restaurant or process payment.</p>
+            <p className="confirmation-intro">{supabase ? 'Your order has been saved. Bank transfers are checked manually by the restaurant.' : 'Your order details are ready. This local demo does not send an order to the restaurant or process payment.'}</p>
             {checkoutDetails && (
               <div className="confirmation-card">
                 <h2>Order summary</h2>
                 <p><strong>Phone</strong><span>{checkoutDetails.phone}</span></p>
                 <p><strong>Delivery to</strong><span>{checkoutDetails.address}</span></p>
+                {(checkoutDetails.paymentMethod || paymentAccount.method) === 'Bank transfer' ? (
+                  <section className="confirmation-payment" aria-labelledby="confirmation-payment-title">
+                    <h3 id="confirmation-payment-title">Pay by bank transfer</h3>
+                    <p><strong>Bank</strong><span>{paymentAccount.bank}</span></p>
+                    <p><strong>Account number</strong><span>{paymentAccount.accountNumber}</span></p>
+                    <p><strong>Account name</strong><span>{paymentAccount.accountName}</span></p>
+                    <p><strong>Transfer reference</strong><span>{checkoutDetails.id}</span></p>
+                    <p className="payment-instructions">Transfer {formatPrice(checkoutDetails.total)} and use your order number as the reference. The restaurant will verify the transfer manually.</p>
+                  </section>
+                ) : (
+                  <section className="confirmation-payment" aria-labelledby="confirmation-payment-title">
+                    <h3 id="confirmation-payment-title">Payment on delivery</h3>
+                    <p className="payment-instructions">Pay {formatPrice(checkoutDetails.total)} to the delivery agent when your order arrives.</p>
+                  </section>
+                )}
                 <ul>
                   {checkoutDetails.items.map((item) => (
                     <li key={item.id}>
@@ -1362,7 +1804,7 @@ function App() {
                     <span>{activeOrder.phone}</span>
                   </div>
                 </div>
-                <aside className="staff-status-panel">
+                {(useLocalDemo || isStoreAdmin) && <aside className="staff-status-panel">
                   <div>
                     <span className="staff-panel-eyebrow">RESTAURANT STAFF</span>
                     <h2>Update order status</h2>
@@ -1379,19 +1821,33 @@ function App() {
                       ))}
                     </select>
                   </label>
-                </aside>
+                </aside>}
               </>
             ) : (
               <div className="checkout-empty">
                 <span aria-hidden="true">✳</span>
-                <h2>No order to track yet.</h2>
-                <p>Once you place an order, its progress will appear here.</p>
-                <button className="button button-primary" type="button" onClick={() => navigateTo('home')}>
-                  Browse the menu <ArrowIcon />
-                </button>
+                {supabase ? (
+                  <>
+                    <h2>Track an order.</h2>
+                    <p>Enter your order number and the phone number used at checkout.</p>
+                    <form className="track-lookup-form" onSubmit={lookupTrackingOrder}>
+                      <label>Order number<input name="orderNumber" autoComplete="off" placeholder="ZEE-…" required /></label>
+                      <label>Phone number<input name="phone" type="tel" autoComplete="tel" required /></label>
+                      <button className="button button-primary" type="submit">Find my order <ArrowIcon /></button>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <h2>No order to track yet.</h2>
+                    <p>Once you place an order, its progress will appear here.</p>
+                    <button className="button button-primary" type="button" onClick={() => navigateTo('home')}>
+                      Browse the menu <ArrowIcon />
+                    </button>
+                  </>
+                )}
               </div>
             )}
-            <p className="tracking-demo-note">Tracking updates are saved in this browser for this demo. Shared live updates require a restaurant ordering system.</p>
+            {useLocalDemo && <p className="tracking-demo-note">Tracking updates are saved in this browser for this demo. Shared live updates require a restaurant ordering system.</p>}
           </section>
         )}
       </main>
@@ -1403,12 +1859,12 @@ function App() {
             <p>Good food for good days.<br />And the days that need a little help.</p>
           </div>
           <div className="footer-links">
-            <div><strong>COME ON IN</strong><a href="#menu">The menu</a><button type="button" onClick={() => navigateTo('about')}>About us</button><a href="#order">Delivery info</a><button type="button" onClick={() => navigateTo('tracking')}>Track order</button><button type="button" onClick={() => navigateTo('admin')}>Admin demo</button></div>
-            <div><strong>FIND US</strong><span>Everywhere good food is needed.</span><a href="mailto:hello@zeetummylab.com">Say hello ↗</a></div>
+            <div><strong>COME ON IN</strong><a href="#menu">The menu</a><button type="button" onClick={() => navigateTo('about')}>About us</button><button type="button" onClick={() => navigateTo('contact')}>Contact</button><a href="#order">Delivery info</a><button type="button" onClick={() => navigateTo('tracking')}>Track order</button><button type="button" onClick={() => navigateTo('admin')}>{useLocalDemo ? 'Admin demo' : 'Admin sign in'}</button></div>
+            <div><strong>FIND US</strong><span>Everywhere good food is needed.</span><a href="mailto:sultanabdulwaheed382@gmail.com">Email us ↗</a><a href="tel:+2349065974857">09065974857</a></div>
           </div>
           <div className="footer-cta"><span>Hungry yet?</span><a href="#menu">Order something lovely <ArrowIcon /></a></div>
         </div>
-        <div className="footer-bottom"><span>© 2026 ZeeTummyLab. Made with extra love.</span><span>GOOD FOOD. GOOD MOOD. NO BAD DAYS.</span></div>
+        <div className="footer-bottom"><span>© 2026 ZeeTummyLab. Made with extra love.</span><a href="/image-credits.html">Food photo credits</a><span>GOOD FOOD. GOOD MOOD. NO BAD DAYS.</span></div>
       </footer>
     </>
   )
