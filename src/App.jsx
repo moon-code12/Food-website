@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { isSupabaseConfigured, mapDatabaseOrder, supabase, useLocalDemo } from './lib/supabase.js'
 import './App.css'
 
-const categories = ['All', 'Rice', 'Swallow', 'Snacks', 'Drinks', 'Fast Food']
+const categories = ['All', 'Rice', 'Swallow', 'Soups', 'Snacks', 'Drinks', 'Fast Food']
 const orderStatuses = [
   'Order received',
   'Confirmed',
@@ -164,7 +164,7 @@ const menuItems = [
     category: 'Drinks',
     price: 3000,
     tag: 'PARTY CLASSIC',
-    available: true,
+    available: true,  
     image:
       'https://commons.wikimedia.org/wiki/Special:FilePath/Chapman_drink.jpg?width=900',
     alt: 'Chapman, a Nigerian non-alcoholic cocktail',
